@@ -831,7 +831,7 @@ body[data-t=areas]{--acc:#7a3fb4}
 <button class="hb" id="btnSearch" title="חיפוש">🔎</button><button class="hb" id="btnRefresh" title="ריענון מידע עדכני">🔄</button><button class="hb" id="btnTheme" title="מצב לילה">🌙</button></header>
 <div id="infobar"></div><div id="wxtop"></div><nav id="tabs"></nav>
 <main><div id="view"></div>
-<div class="foot">יוצר: <b>יעקב זוהר</b> · גרסה 20261115-01<br>מפות © OpenStreetMap, CARTO · תמונות: Wikipedia/Wikimedia Commons · מזג אוויר: Open-Meteo<br>המידע נאסף ממקורות ציבוריים ועלול להשתנות – לאימות מחירים ושעות השתמשו בקישורי האתרים.</div></main>
+<div class="foot">יוצר: <b>יעקב זוהר</b> · גרסה 20261117-02<br>מפות © OpenStreetMap, CARTO · תמונות: Wikipedia/Wikimedia Commons · מזג אוויר: Open-Meteo<br>המידע נאסף ממקורות ציבוריים ועלול להשתנות – לאימות מחירים ושעות השתמשו בקישורי האתרים.</div></main>
 <div id="ov"><div id="sheet"><div class="in"></div></div></div>
 <script>/* @preserve
  * Leaflet 1.9.4, a JS library for interactive maps. https://leafletjs.com
@@ -1233,7 +1233,7 @@ APP.DAYS=DAYS;
 /* ---------- state ---------- */
 let S;
 try{S=JSON.parse(localStorage.getItem('ld_state')||'{}')}catch(e){S={}}
-S.fav=S.fav||{};S.hid=S.hid||{};S.custom=S.custom||[];S.set=S.set||{};S.photos=S.photos||{};S.chk=S.chk||{};S.trip=S.trip||{};
+S.fav=S.fav||{};S.hid=S.hid||{};S.custom=S.custom||[];S.set=S.set||{};S.photos=S.photos||{};S.chk=S.chk||{};S.trip=S.trip||{};S.notes=S.notes||{};S.overrides=S.overrides||{};S.trips=S.trips||[];
 function save(){try{localStorage.setItem('ld_state',JSON.stringify(S))}catch(e){}}
 APP.S=S;APP.save=save;
 function toast(m,ms=2600){let t=$('.toast');if(t)t.remove();t=document.createElement('div');t.className='toast';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),ms)}
@@ -1265,12 +1265,15 @@ APP.pills=pills;
 /* ---------- data access ---------- */
 const TYPES={sites:{k:'sites',ic:'🏛️',lbl:'אתרים'},hotels:{k:'hotels',ic:'🏨',lbl:'מלונות'},restaurants:{k:'restaurants',ic:'🍽️',lbl:'מסעדות'},foods:{k:'foods',ic:'🥧',lbl:'אוכל'},shops:{k:'shops',ic:'🛍️',lbl:'קניות'},markets:{k:'markets',ic:'🏪',lbl:'שווקים'},events:{k:'events',ic:'🎭',lbl:'אירועים'}};
 APP.TYPES=TYPES;
-function items(type){const base=(D[type]||[]);const cu=S.custom.filter(c=>c.type===type);return base.concat(cu)}
 function key(type,id){return type+':'+id}
+function applyOverride(type,it){if(!it)return it;const o=S.overrides[key(type,it.id)];if(!o)return it;return Object.assign({},it,o,{_overridden:true})}
+function items(type){const base=(D[type]||[]).map(i=>applyOverride(type,i));const cu=S.custom.filter(c=>c.type===type);return base.concat(cu)}
 function isFav(type,id){return !!S.fav[key(type,id)]}
 function isHid(type,id){return !!S.hid[key(type,id)]}
 function findItem(type,id){return items(type).find(i=>i.id===id)}
-Object.assign(APP,{items,key,isFav,isHid,findItem});
+function getNote(type,id){return S.notes[key(type,id)]||{rating:0,text:''}}
+function setNote(type,id,rating,text){const k=key(type,id);if(!rating&&!(text||'').trim()){delete S.notes[k]}else{S.notes[k]={rating:+rating||0,text:(text||'').trim()}}save()}
+Object.assign(APP,{items,key,isFav,isHid,findItem,getNote,setNote,applyOverride});
 function toggleFav(type,id){const k=key(type,id);if(S.fav[k])delete S.fav[k];else S.fav[k]=1;save()}
 function toggleHid(type,id){const k=key(type,id);if(S.hid[k])delete S.hid[k];else S.hid[k]=1;save()}
 APP.toggleFav=toggleFav;APP.toggleHid=toggleHid;
@@ -1335,8 +1338,14 @@ function nearbyHTML(it){
   return h}
 APP.nearbyHTML=nearbyHTML;
 function actionsHTML(type,it){
-  const f=isFav(type,it.id),h=isHid(type,it.id);
-  return `<div class="row"><a class="btn" href="${gmNav(it)}" target="_blank" rel="noopener">🧭 ניווט</a><button class="btn sec" data-act="fav" data-type="${type}" data-id="${esc(it.id)}">${f?'⭐ במועדפים':'☆ מעניין אותי'}</button>${it.custom?`<button class="btn sec" data-act="del" data-type="${type}" data-id="${esc(it.id)}">🗑️ מחק</button>`:`<button class="btn sec" data-act="hide" data-type="${type}" data-id="${esc(it.id)}">${h?'👁️ החזר':'🙈 הסתר'}</button>`}</div>`}
+  const f=isFav(type,it.id),h=isHid(type,it.id),n=getNote(type,it.id);
+  const starsBtn=[1,2,3,4,5].map(s=>`<button class="btn sm sec" data-act="rate" data-type="${type}" data-id="${esc(it.id)}" data-v="${s}" style="${n.rating>=s?'color:#d4af37;font-weight:800':''}" title="דירוג ${s}">${n.rating>=s?'★':'☆'}</button>`).join('');
+  return `<div class="sec">⭐ הדירוג וההערות שלי</div><div class="row" style="gap:4px;align-items:center">${starsBtn}<button class="btn sm sec" data-act="noteedit" data-type="${type}" data-id="${esc(it.id)}">📝 הערה</button></div>${n.text?`<div class="tipbox" style="margin-top:6px">📝 ${esc(n.text)}</div>`:''}
+  <div class="row" style="margin-top:8px"><a class="btn" href="${gmNav(it)}" target="_blank" rel="noopener">🧭 ניווט</a><button class="btn sec" data-act="fav" data-type="${type}" data-id="${esc(it.id)}">${f?'⭐ במועדפים':'☆ מעניין אותי'}</button>
+  <button class="btn sec" data-act="edititem" data-type="${type}" data-id="${esc(it.id)}">✏️ ערוך</button>
+  ${it.custom?`<button class="btn sec" data-act="del" data-type="${type}" data-id="${esc(it.id)}">🗑️ מחק</button>`:`<button class="btn sec" data-act="hide" data-type="${type}" data-id="${esc(it.id)}">${h?'👁️ החזר':'🙈 הסתר'}</button>`}
+  ${it.lat?`<button class="btn sec" data-act="shareloc" data-lat="${it.lat}" data-lng="${it.lng}" data-name="${esc(it.name)}">📍 שלח מיקום</button>`:''}</div>`
+}
 function mapBox(it){return it.lat?`<div class="sec">🗺️ מפה</div><button class="btn sec" data-act="embed" data-lat="${it.lat}" data-lng="${it.lng}">הצג מפת Google</button><div class="gmw"></div>`:''}
 /* ---------- detail views ---------- */
 function detail(type,id){
@@ -1390,6 +1399,7 @@ function detail(type,id){
   if(it.wp)h+=`<div class="foot">התמונה נטענת מוויקיפדיה/Wikimedia Commons (רישיונות חופשיים) · ${it.checked?'נבדק: '+esc(it.checked):''}</div>`;
   h+='</div>';
   openSheet(h)}
+A.detail=detail;APP.detail=detail;
 const FOODTAG={breakfast:'ארוחת בוקר',main:'מנה עיקרית',street:'אוכל רחוב',dessert:'קינוח',drink:'משקה',snack:'נשנוש',veg:'צמחוני',tea:'תה',pub:'פאב'};
 const SHOPT={department:'כלבו',mall:'קניון',outlet:'אאוטלט',street:'רחוב קניות',books:'ספרים',vintage:'וינטג\'',luxury:'יוקרה',souvenir:'מזכרות',food:'מזון',toys:'צעצועים'};
 const MKT={food:'אוכל',antiques:'עתיקות',vintage:'וינטג\'',flowers:'פרחים',crafts:'אומנות',general:'כללי'};
@@ -1457,7 +1467,7 @@ function filterItems(type){
   return L}
 /* ---------- card ---------- */
 function cardHTML(type,it){
-  const f=isFav(type,it.id),h=isHid(type,it.id);
+  const f=isFav(type,it.id),h=isHid(type,it.id),un=getNote(type,it.id);
   let badge='',body='',exp='';
   if(type==='sites'){
     badge=it.cat||'';
@@ -1486,7 +1496,7 @@ function cardHTML(type,it){
     exp=`<p><b>שעות:</b> ${esc(it.hours||'')}</p><p><b>כתובת:</b> ${esc(it.address||'')}</p><p><b>הגעה:</b> ${esc(it.getting||'')}</p>`}
   if(it.custom)badge='⭐ שלי';
   const dd=(A.loc&&it.lat&&fs(type).near)?`<span class="tag">📍 ${A.hav(A.loc.lat,A.loc.lng,it.lat,it.lng).toFixed(1)} ק"מ</span>`:'';
-  return `<article class="card ${h?'hid':''}">${phHTML(type,it)}<span class="badge">${esc(badge)}</span><div class="acts"><button data-act="fav" data-type="${type}" data-id="${esc(it.id)}" title="מעניין אותי">${f?'⭐':'☆'}</button>${it.custom?`<button data-act="del" data-type="${type}" data-id="${esc(it.id)}" title="מחק">🗑️</button>`:`<button data-act="hide" data-type="${type}" data-id="${esc(it.id)}" title="${h?'החזר':'הסתר'}">${h?'👁️':'🙈'}</button>`}</div><div class="cb"><h3>${esc(it.name)}</h3>${it.en?`<div class="en">${esc(it.en)}</div>`:''}${dd}${body}<div class="exp">${exp}</div><div class="row"><button class="btn sec sm" data-act="exp">הרחב ▾</button><button class="btn sm" data-act="open" data-type="${type}" data-id="${esc(it.id)}">פרטים מלאים ←</button></div></div></article>`}
+  return `<article class="card ${h?'hid':''}">${phHTML(type,it)}<span class="badge">${esc(badge)}</span><div class="acts"><button data-act="fav" data-type="${type}" data-id="${esc(it.id)}" title="מעניין אותי">${f?'⭐':'☆'}</button><button data-act="edititem" data-type="${type}" data-id="${esc(it.id)}" title="ערוך">✏️</button>${it.custom?`<button data-act="del" data-type="${type}" data-id="${esc(it.id)}" title="מחק">🗑️</button>`:`<button data-act="hide" data-type="${type}" data-id="${esc(it.id)}" title="${h?'החזר':'הסתר'}">${h?'👁️':'🙈'}</button>`}</div><div class="cb"><h3>${esc(it.name)}</h3>${it.en?`<div class="en">${esc(it.en)}</div>`:''}${dd}${un.rating?`<div class="meta"><span class="tag y">${'★'.repeat(un.rating)}${'☆'.repeat(5-un.rating)} שלי</span>${un.text?`<span class="tag">📝</span>`:''}${it._overridden?'<span class="tag">✏️ עודכן</span>':''}</div>`:(it._overridden?'<div class="meta"><span class="tag">✏️ עודכן</span></div>':'')}${body}<div class="exp">${exp}</div><div class="row"><button class="btn sec sm" data-act="exp">הרחב ▾</button><button class="btn sm" data-act="open" data-type="${type}" data-id="${esc(it.id)}">פרטים מלאים ←</button></div></div></article>`}
 A.cardHTML=cardHTML;
 /* ---------- list tab ---------- */
 const TITLES={sites:['🏛️','אתרים, אטרקציות ומקומות מעניינים','תמצית עם אפשרות הרחבה. סננו לפי מה שחשוב לכם, ⭐ סמנו מה שמעניין, 🙈 הסתירו מה שלא.'],hotels:['🏨','מלונות מומלצים 4–5 כוכבים','מחירי ההזמנה משוערים ללילה לחדר זוגי; מומלץ לבדוק לפי תאריכים.'],restaurants:['🍽️','מסעדות מומלצות','כולל מחיר משוער, כתובת וטלפון. אפשר לסנן כשר/צמחוני.'],foods:['🥧','אוכל בריטי ומאכלי לונדון','מרכיבים, תמונות והמלצות איפה לטעום.'],shops:['🛍️','קניות','כלבו, קניונים, אאוטלטים ורחובות קניות.'],markets:['🏪','שווקים','ימי פעילות, כתובות ודרכי הגעה.']};
@@ -1520,7 +1530,34 @@ Object.assign(A.act,{
   hide(e,b){const t=b.dataset.type,id=b.dataset.id;A.toggleHid(t,id);toast(isHid(t,id)?'הוסתר – אפשר להחזיר דרך "הצג מוסתרים"':'הוחזר',1800);if($('#ov').classList.contains('on'))A.closeSheet();A.rerender()},
   del(e,b){if(!confirm('למחוק את המקום שהוספת?'))return;S.custom=S.custom.filter(c=>!(c.type===b.dataset.type&&c.id===b.dataset.id));save();if($('#ov').classList.contains('on'))A.closeSheet();A.rerender()},
   embed(e,b){const w=b.nextElementSibling;w.innerHTML=`<iframe class="gm" loading="lazy" src="${A.gmEmbed({lat:b.dataset.lat,lng:b.dataset.lng})}"></iframe>`;b.remove()},
-  close(){A.closeSheet()}
+  close(){A.closeSheet()},
+  rate(e,b){const t=b.dataset.type,id=b.dataset.id,v=+b.dataset.v;const n=getNote(t,id);const nv=n.rating===v?0:v;setNote(t,id,nv,n.text);toast(nv?('דירגת '+nv+' כוכבים'):'דירוג בוטל',1200);A.detail(t,id)},
+  noteedit(e,b){const t=b.dataset.type,id=b.dataset.id,n=getNote(t,id);A._note={t,id};
+    A.openSheet(`<div class="det"><h2>📝 הערה אישית</h2><div class="fld"><label>דירוג (1–5)</label><select id="nr">${[0,1,2,3,4,5].map(x=>`<option value="${x}" ${n.rating===x?'selected':''}>${x?('★'.repeat(x)):'ללא'}</option>`).join('')}</select></div><div class="fld"><label>הערה</label><textarea id="nt" rows="4" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit">${esc(n.text||'')}</textarea></div><div class="row"><button class="btn" data-act="notesave">שמור</button><button class="btn sec" data-act="close">ביטול</button></div></div>`)},
+  notesave(){const x=A._note;if(!x)return;setNote(x.t,x.id,+$('#nr').value,$('#nt').value);toast('נשמר');A.detail(x.t,x.id)},
+  edititem(e,b){const t=b.dataset.type,id=b.dataset.id,it=findItem(t,id);if(!it)return;A._ed={t,id};
+    const fields=t==='hotels'?[['name','שם'],['en','שם באנגלית'],['priceFrom','מחיר מ- (£)'],['priceTo','מחיר עד (£)'],['breakfast','ארוחת בוקר'],['address','כתובת'],['phone','טלפון'],['web','אתר'],['why','למה מומלץ']]:t==='restaurants'?[['name','שם'],['en','שם באנגלית'],['cuisine','סוג אוכל'],['price','רמת מחיר (1-4)'],['priceNote','הערת מחיר'],['booking','הזמנה'],['address','כתובת'],['phone','טלפון'],['web','אתר'],['desc','תיאור']]:t==='sites'?[['name','שם'],['en','שם באנגלית'],['summary','תקציר'],['price','מחיר'],['hours','שעות'],['tickets','כרטיסים'],['address','כתובת'],['phone','טלפון'],['web','אתר'],['getting','איך מגיעים'],['tip','טיפ']]:[['name','שם'],['en','שם באנגלית'],['desc','תיאור'],['address','כתובת'],['phone','טלפון'],['web','אתר'],['hours','שעות']];
+    A.openSheet(`<div class="det"><h2>✏️ עריכת ${esc(it.name)}</h2><p class="lead">השינויים נשמרים רק במכשיר (override מקומי).</p>${fields.map(([fk,l])=>`<div class="fld"><label>${esc(l)}</label><input id="ed_${fk}" value="${esc(String(it[fk]??''))}" ${fk==='web'||fk==='phone'||fk==='en'?'dir="ltr"':''}></div>`).join('')}<div class="row"><button class="btn" data-act="editsave">שמור שינויים</button>${S.overrides[key(t,id)]?`<button class="btn sec" data-act="editreset">🔄 שחזר מקורי</button>`:''}<button class="btn sec" data-act="close">ביטול</button></div></div>`)},
+  editsave(){const x=A._ed;if(!x)return;const it0=(D[x.t]||[]).find(i=>i.id===x.id)||S.custom.find(c=>c.type===x.t&&c.id===x.id);if(!it0&&!findItem(x.t,x.id))return;
+    const base=it0||findItem(x.t,x.id);const fields=['name','en','summary','desc','price','priceFrom','priceTo','priceNote','hours','tickets','address','phone','web','getting','tip','why','breakfast','cuisine','booking'];
+    const o=Object.assign({},S.overrides[key(x.t,x.id)]||{});
+    fields.forEach(fk=>{const el=$('#ed_'+fk);if(!el)return;let v=el.value.trim();if(['priceFrom','priceTo','price'].includes(fk)){const n=+v;if(v!==''&&!isNaN(n))v=n}const orig=base[fk];if(String(orig??'')!==String(v))o[fk]=v;else delete o[fk]});
+    if(Object.keys(o).length)S.overrides[key(x.t,x.id)]=o;else delete S.overrides[key(x.t,x.id)];
+    save();toast('עודכן');A.detail(x.t,x.id);A.rerender()},
+  editreset(){const x=A._ed;if(!x)return;delete S.overrides[key(x.t,x.id)];save();toast('שוחזר למקור');A.detail(x.t,x.id);A.rerender()},
+  shareloc(e,b){const lat=b.dataset.lat,lng=b.dataset.lng,name=b.dataset.name||'מיקום';
+    const maps=`https://www.google.com/maps?q=${lat},${lng}`;
+    const txt=`📍 ${name}\n${maps}\nקואורדינטות: ${lat}, ${lng}`;
+    A.openSheet(`<div class="det"><h2>📍 שליחת מיקום</h2><p><b>${esc(name)}</b></p><p dir="ltr" style="font-size:.85rem">${esc(maps)}</p><div class="row" style="flex-direction:column;align-items:stretch;gap:8px">
+      <a class="btn" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(txt)}">💬 WhatsApp</a>
+      <a class="btn sec" target="_blank" rel="noopener" href="https://t.me/share/url?url=${encodeURIComponent(maps)}&text=${encodeURIComponent('📍 '+name)}">✈️ Telegram</a>
+      <a class="btn sec" href="mailto:?subject=${encodeURIComponent('מיקום: '+name)}&body=${encodeURIComponent(txt)}">✉️ אימייל</a>
+      <button class="btn sec" data-act="copyloc" data-txt="${esc(txt)}">📋 העתק</button>
+      <a class="btn sec" target="_blank" rel="noopener" href="${esc(maps)}">🗺️ פתח ב-Google Maps</a>
+    </div></div>`)},
+  copyloc(e,b){navigator.clipboard.writeText(b.dataset.txt||'').then(()=>toast('הועתק')).catch(()=>toast('לא ניתן להעתיק'))},
+  shareapp(){A.exportShare()},
+  sharemyloc(){A.locate(()=>{if(!A.loc)return;const fake={dataset:{lat:String(A.loc.lat),lng:String(A.loc.lng),name:'המיקום שלי בלונדון'}};A.act.shareloc(null,fake)})}
 });
 document.addEventListener('input',e=>{const t=e.target;if(t.id==='q'&&t.dataset.tab){fs(t.dataset.tab).q=t.value.trim();updateList(t.dataset.tab)}});
 /* ---------- location ---------- */
@@ -1861,10 +1898,10 @@ function gen(){
   const rad={low:1.3,med:2.4,high:4}[o.walk];
   const sc=(p)=>{let s=p.rank*3;const m=o.ints.filter(i=>INTMAP[i]&&INTMAP[i](Object.assign({},p.it,{cat:p.cat}))).length;s+=m*4;
     if(o.kids){if(p.kids)s+=3;else s-=4}
-    if(p.cat==='מוזיאונים'&&!o.ints.includes('museums'))s-=3;
+    if(p.cat==='מוזיאונים'&&!o.ints.includes('museums'))s-=8;else if(p.cat==='מוזיאונים'&&o.ints.includes('museums'))s+=2;
     if(o.budget==='low'){if((p.it.free)||p.type==='markets')s+=3;else s-=(p.it.priceLevel||1)*1.2}
     if(o.walk==='low'&&p.walk===3&&p.rank<5)s-=5;
-    if(o.first&&p.rank>=5)s+=4;return s};
+    if(o.first&&p.rank>=5)s+=4;if(o.first&&p.cat!=='מוזיאונים'&&p.rank>=4)s+=2;return s};
   pool.forEach(p=>p.sc=sc(p));
   const used=new Set();const days=[];
   const nTrip=(o.trips&&o.days>=4)?Math.min(Math.floor((o.days-1)/3),3):0;
@@ -2026,14 +2063,16 @@ A.render_mine=function(){
   <div class="sec">⭐ מה שמעניין אותי (${fav.length})</div>${fav.length?`<div class="grid">${fav.filter(x=>x.t!=='events').map(x=>A.cardHTML(x.t,x.i)).join('')}</div>`:'<div class="empty">עוד לא סימנתם מועדפים – לחצו ☆ בכרטיסים.</div>'}
   <div class="sec">🙈 מוסתרים (${hid.length})</div>${hid.length?hid.map(x=>`<div style="margin:3px 0">${esc(x.i.name)} <button class="btn sm sec" data-act="hide" data-type="${x.t}" data-id="${esc(x.i.id)}">החזר</button></div>`).join(''):'<div class="lead">אין.</div>'}
   <div class="sec">➕ מקומות שהוספתי (${cust.length})</div>${cust.length?cust.map(c=>`<div style="margin:3px 0">${esc(c.name)} <small style="color:var(--mute)">(${A.TYPES[c.type].lbl})</small> <button class="btn sm sec" data-act="del" data-type="${c.type}" data-id="${esc(c.id)}">מחק</button></div>`).join(''):'<div class="lead">אין – אפשר להוסיף מכל רשימה בכפתור ➕.</div>'}
-  <div class="sec">⚙️ הגדרות וגיבוי</div><div class="card" style="padding:12px"><div class="row"><button class="btn sec" data-act="dark">${document.body.classList.contains('dark')?'☀️ מצב יום':'🌙 מצב לילה'}</button><button class="btn sec" data-act="backup">📤 גיבוי</button><button class="btn sec" data-act="restore">📥 שחזור</button></div><input type="file" id="rf" accept=".json" style="display:none"><div class="row"><button class="btn sec" data-act="resetall">🧹 איפוס מועדפים/הסתרות</button></div><p class="lead">גרסה ${A.version}. נתוני האפליקציה נשמרים רק במכשיר.</p></div>`;
+  <div class="sec">⭐ דירוגים והערות שלי (${Object.keys(S.notes||{}).length})</div>${Object.keys(S.notes||{}).length?Object.keys(S.notes).map(k=>{const parts=k.split(':');const t=parts[0],id=parts.slice(1).join(':');const it=A.findItem(t,id);const n=S.notes[k];return it?`<div style="margin:4px 0;padding:6px 0;border-bottom:1px solid var(--line)"><a href="javascript:void 0" data-act="open" data-type="${t}" data-id="${esc(id)}"><b>${esc(it.name)}</b></a> <span class="tag y">${'★'.repeat(n.rating||0)}</span>${n.text?`<div style="font-size:.84rem">📝 ${esc(n.text)}</div>`:''}</div>`:''}).join(''):'<div class="lead">אין עדיין – דרגו מקומות מתוך כרטיס הפרטים.</div>'}
+  <div class="sec">✏️ מקומות שערכתם (${Object.keys(S.overrides||{}).length})</div>${Object.keys(S.overrides||{}).length?Object.keys(S.overrides).map(k=>{const parts=k.split(':');const t=parts[0],id=parts.slice(1).join(':');const it=A.findItem(t,id);return it?`<div style="margin:3px 0">${esc(it.name)} <button class="btn sm sec" data-act="open" data-type="${t}" data-id="${esc(id)}">פתח</button></div>`:''}).join(''):'<div class="lead">אין – לחצו ✏️ בכרטיס לפרטים.</div>'}
+  <div class="sec">⚙️ הגדרות, שיתוף וגיבוי</div><div class="card" style="padding:12px"><div class="row"><button class="btn sec" data-act="dark">${document.body.classList.contains('dark')?'☀️ מצב יום':'🌙 מצב לילה'}</button><button class="btn gold" data-act="shareapp">🔗 שתף מדריך מותאם אישית</button><button class="btn sec" data-act="sharemyloc">📍 שלח את המיקום שלי</button></div><div class="row"><button class="btn sec" data-act="backup">📤 גיבוי</button><button class="btn sec" data-act="restore">📥 שחזור</button></div><input type="file" id="rf" accept=".json" style="display:none"><div class="row"><button class="btn sec" data-act="resetall">🧹 איפוס מועדפים/הסתרות/דירוגים</button></div><p class="lead">גרסה ${A.version}. נתוני האפליקציה נשמרים במכשיר. שיתוף מותאם יוצר קישור עם המועדפים, ההסתרות, הדירוגים, העריכות והמסלולים שלכם.</p></div>`;
   A.lazyPhotos($('#view'));
-  $('#rf').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const j=JSON.parse(await f.text());if(j&&j.fav){Object.assign(S,{fav:j.fav||{},hid:j.hid||{},custom:j.custom||[],chk:j.chk||{}});save();toast('שוחזר');A.render_mine()}else toast('קובץ לא תקין')}catch(er){toast('קובץ לא תקין')}}};
+  $('#rf').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const j=JSON.parse(await f.text());if(j&&(j.fav||j.notes||j.trips)){Object.assign(S,{fav:j.fav||S.fav,hid:j.hid||S.hid,custom:j.custom||S.custom,chk:j.chk||S.chk,notes:j.notes||S.notes,overrides:j.overrides||S.overrides,trips:j.trips||S.trips,trip:j.trip||S.trip});save();toast('שוחזר');A.render_mine()}else toast('קובץ לא תקין')}catch(er){toast('קובץ לא תקין')}}};
 Object.assign(A.act,{
   dark(){const d=document.body.classList.toggle('dark');S.set.dark=d;save();A.render_mine()},
-  backup(){A.saveFile('London_Guide_Backup.json',new Blob([JSON.stringify({fav:S.fav,hid:S.hid,custom:S.custom,chk:S.chk,at:new Date().toISOString()},null,1)],{type:'application/json'}))},
+  backup(){A.saveFile('London_Guide_Backup.json',new Blob([JSON.stringify({fav:S.fav,hid:S.hid,custom:S.custom,chk:S.chk,notes:S.notes,overrides:S.overrides,trips:S.trips,trip:S.trip,at:new Date().toISOString()},null,1)],{type:'application/json'}))},
   restore(){$('#rf').click()},
-  resetall(){if(confirm('לאפס מועדפים והסתרות?')){S.fav={};S.hid={};save();A.render_mine()}}});
+  resetall(){if(confirm('לאפס מועדפים, הסתרות, דירוגים ועריכות?')){S.fav={};S.hid={};S.notes={};S.overrides={};save();A.render_mine()}}});
 })();
 
 /* v2: date picker, weather strip, today, map picker, full-screen, legend, tips tabs, sleep areas, event tickets */
@@ -2232,6 +2271,44 @@ $('#btnTheme').onclick=()=>{const d=document.body.classList.toggle('dark');S.set
       if(m.t==='hello'&&est){bc.postMessage({t:'here',to:m.id});try{window.focus()}catch(x){}toast('ניסיון לפתוח עותק נוסף – זה העותק הפתוח')}
       if(m.t==='here'&&m.to===ID&&!est){est=false;const o=document.createElement('div');o.style.cssText='position:fixed;inset:0;z-index:9999;background:#0b1f4b;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:20px;font-size:1.1rem';o.innerHTML='<div style="font-size:3rem">🕰️</div><b>האפליקציה כבר פתוחה</b><div>עברו לחלון/לשונית הפתוחים של "לונדון – מידע למטייל".</div><button class="btn gold" id="dupc">סגור חלון זה</button>';document.body.appendChild(o);$('#dupc').onclick=()=>{try{window.close()}catch(x){}};try{window.close()}catch(x){}}};
     bc.postMessage({t:'hello',id:ID});setTimeout(()=>{if(!document.getElementById('dupc'))est=true},700)}catch(e){est=true}})();
+
+/* ===== v3: share personalized guide, import state, print polish ===== */
+(function(){
+'use strict';
+const A=window.APP,{$,esc,S,save,toast}=A;
+function packState(){return {v:3,fav:S.fav,hid:S.hid,custom:S.custom,chk:S.chk,notes:S.notes,overrides:S.overrides,trips:S.trips,trip:S.trip}}
+function unpackState(j){if(!j||typeof j!=='object')return false;if(j.fav)S.fav=j.fav;if(j.hid)S.hid=j.hid;if(j.custom)S.custom=j.custom;if(j.chk)S.chk=j.chk;if(j.notes)S.notes=j.notes;if(j.overrides)S.overrides=j.overrides;if(j.trips)S.trips=j.trips;if(j.trip)S.trip=j.trip;save();return true}
+function b64url(str){const b=btoa(unescape(encodeURIComponent(str)));return b.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+function unb64url(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return decodeURIComponent(escape(atob(s)))}
+A.exportShare=async function(){
+  const data=JSON.stringify(packState());
+  let url;
+  try{
+    if(data.length<1800){url=location.href.split('#')[0].split('?')[0]+'#state='+b64url(data)}
+    else{A.saveFile('London_Guide_MySetup.json',new Blob([data],{type:'application/json'}));toast('ההגדרות גדולות לקישור – הורד קובץ לשיתוף',4000);return}
+  }catch(e){toast('שגיאה ביצירת קישור');return}
+  A.openSheet(`<div class="det"><h2>🔗 מדריך לונדון מותאם אישית</h2>
+    <p class="lead">הקישור כולל מועדפים, הסתרות, דירוגים, עריכות ומסלולים.</p>
+    <div class="fld"><label>קישור לשיתוף</label><input id="shurl" dir="ltr" readonly value="${esc(url)}" style="font-size:.78rem"></div>
+    <div class="row" style="flex-direction:column;align-items:stretch;gap:8px">
+      <button class="btn" data-act="copyshare">📋 העתק קישור</button>
+      <a class="btn sec" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent('מדריך לונדון מותאם אישית שלי:\n'+url)}">💬 שלח ב-WhatsApp</a>
+      <a class="btn sec" target="_blank" rel="noopener" href="https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent('מדריך לונדון מותאם אישית')}">✈️ Telegram</a>
+      <a class="btn sec" href="mailto:?subject=${encodeURIComponent('מדריך לונדון מותאם')}&body=${encodeURIComponent(url)}">✉️ אימייל</a>
+      <button class="btn sec" data-act="backup">💾 שמור גם כקובץ גיבוי</button>
+    </div></div>`);
+};
+A.act.copyshare=function(){const u=$('#shurl');if(!u)return;navigator.clipboard.writeText(u.value).then(()=>toast('הקישור הועתק')).catch(()=>{u.select();toast('סמנו והעתיקו ידנית')})};
+function tryImportState(){
+  const h=location.hash||'';const m=h.match(/[#&]state=([A-Za-z0-9\-_]+)/);if(!m)return;
+  try{const j=JSON.parse(unb64url(m[1]));if(unpackState(j)){history.replaceState(null,'',location.pathname+location.search);toast('נטען מדריך מותאם אישית משותף ✨',4000)}}catch(e){console.warn(e);toast('לא ניתן לטעון את הקישור המשותף')}
+}
+tryImportState();
+const st=document.createElement('style');
+st.textContent='@media print{header,#tabs,#infobar,#wxtop,.hb,.fsb,.edb,nav{display:none!important}body{background:#fff;color:#000}.card,.day{break-inside:avoid;box-shadow:none;border:1px solid #ccc}#view{max-width:100%}a[href]::after{content:""}}';
+document.head.appendChild(st);
+})();
+
 /* boot */
 if(S.set.dark){document.body.classList.add('dark');$('#btnTheme').textContent='☀️'}
 buildChrome();

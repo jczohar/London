@@ -1,10 +1,54 @@
-const V="london-20261115-01";
-const SHELL=["./","index.html","manifest.json","icon-192.png","icon-512.png"];
-self.addEventListener("install",e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});
-self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==V&&x.startsWith("london-")).map(x=>caches.delete(x)))).then(()=>self.clients.claim()))});
-self.addEventListener("message",e=>{if(e.data==="skip")self.skipWaiting()});
-self.addEventListener("fetch",e=>{
-  const r=e.request;if(r.method!=="GET")return;const u=new URL(r.url);
-  const netFirst=r.mode==="navigate"||u.hostname.includes("open-meteo")||u.hostname.includes("er-api");
-  if(netFirst){e.respondWith(fetch(r).then(x=>{const c=x.clone();caches.open(V).then(k=>k.put(r,c));return x}).catch(()=>caches.match(r).then(m=>m||caches.match("index.html"))));return}
-  e.respondWith(caches.match(r).then(m=>{const f=fetch(r).then(x=>{if(x&&(x.ok||x.type==="opaque")){const c=x.clone();caches.open(V).then(k=>k.put(r,c))}return x}).catch(()=>m);return m||f}))});
+/* London Guide Service Worker – offline shell */
+const CACHE = 'london-guide-v20261117-02';
+const ASSETS = [
+  './',
+  './index.html',
+  './London_Guide.html',
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png'
+];
+
+self.addEventListener('install', (e) => {
+  e.waitUntil(
+    caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+    ).then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('message', (e) => {
+  if (e.data === 'skip') self.skipWaiting();
+});
+
+self.addEventListener('fetch', (e) => {
+  const req = e.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  // Network-first for APIs (weather, rates, wikipedia)
+  if (/open-meteo|er-api|wikipedia|tile\.|arcgisonline|openstreetmap/i.test(url.href)) {
+    e.respondWith(
+      fetch(req).then((r) => r).catch(() => caches.match(req))
+    );
+    return;
+  }
+  // Cache-first for app shell
+  e.respondWith(
+    caches.match(req).then((cached) => {
+      const fetched = fetch(req).then((res) => {
+        if (res && res.ok && url.origin === self.location.origin) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+        }
+        return res;
+      }).catch(() => cached);
+      return cached || fetched;
+    })
+  );
+});
