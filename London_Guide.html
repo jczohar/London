@@ -1399,7 +1399,7 @@ function detail(type,id){
   if(it.wp)h+=`<div class="foot">התמונה נטענת מוויקיפדיה/Wikimedia Commons (רישיונות חופשיים) · ${it.checked?'נבדק: '+esc(it.checked):''}</div>`;
   h+='</div>';
   openSheet(h)}
-A.detail=detail;APP.detail=detail;
+APP.detail=detail;
 const FOODTAG={breakfast:'ארוחת בוקר',main:'מנה עיקרית',street:'אוכל רחוב',dessert:'קינוח',drink:'משקה',snack:'נשנוש',veg:'צמחוני',tea:'תה',pub:'פאב'};
 const SHOPT={department:'כלבו',mall:'קניון',outlet:'אאוטלט',street:'רחוב קניות',books:'ספרים',vintage:'וינטג\'',luxury:'יוקרה',souvenir:'מזכרות',food:'מזון',toys:'צעצועים'};
 const MKT={food:'אוכל',antiques:'עתיקות',vintage:'וינטג\'',flowers:'פרחים',crafts:'אומנות',general:'כללי'};
